@@ -5,10 +5,11 @@
 conda create -n openvla python=3.10 -y
 conda activate openvla
 
-pip install -e .
-pip install packaging ninja
+pip3 install -e .
+pip3 install packaging ninja
+# pip3 install --upgrade torch torchvision torchaudio
 ninja --version; echo $?  # Verify Ninja --> should return exit code "0"
-pip install "flash-attn==2.5.5" --no-build-isolation
+pip3 install "flash-attn==2.5.5" --no-build-isolation
 ```
 
 train
@@ -19,8 +20,6 @@ PYTHONPATH='./' torchrun --standalone --nnodes 1 --nproc-per-node 8 vla-scripts/
   --data_root_dir '<openx-path>' \  # download from https://huggingface.co/datasets/WeiChow/VLATrainingDataset
   --run_root_dir './runs/'
 ```
-
-
 
 
 # OpenVLA: An Open-Source Vision-Language-Action Model
