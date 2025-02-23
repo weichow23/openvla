@@ -267,6 +267,7 @@ class TrainingStrategy(ABC):
         """Run the VLA training loop for the given `dataset` and `collator`; log losses, action metrics to `metrics`."""
         assert isinstance(vla_dataset, IterableDataset), "VLA training expects an IterableDataset!"
         assert self.grad_accumulation_steps == 1, "VLA training does not support gradient accumulation!"
+       
 
         # Create a DataLoader =>> Set `num_workers` to 0; RLDS loader handles parallelism!
         dataloader = DataLoader(

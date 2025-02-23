@@ -18,7 +18,7 @@ from typing import Tuple
 from draccus import ChoiceRegistry
 
 DEFAULT_DATA_ROOT = "/tmp/datasets"
-
+os.environ["PRISMATIC_DATA_ROOT"] = 'prismatic_data'
 
 @dataclass
 class DatasetConfig(ChoiceRegistry):

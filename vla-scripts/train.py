@@ -37,7 +37,9 @@ from prismatic.vla.datasets.rlds.utils.data_utils import save_dataset_statistics
 
 # Sane Defaults
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+# WanDB for zw@usc
+# export WANDB_MODE=disabled  export WANDB_MODE=online
+os.environ["WANDB_API_KEY"] = "694a4f88e896dab0bc5000f60be7881c201d0e98"
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -46,10 +48,8 @@ overwatch = initialize_overwatch(__name__)
 @dataclass
 class TrainConfig:
     # fmt: off
-
-    # VLAConfig (`prismatic/conf/vla.py`); override with --vla.type `VLARegistry.<VLA>.vla_id`
     vla: VLAConfig = field(
-        default_factory=VLAConfig.get_choice_class(VLARegistry.DINOSIGLIP_224PX_MX_OXE_MAGIC_SOUP_PLUS.vla_id)
+        default_factory=VLAConfig.get_choice_class(VLARegistry.QWEN25_DINOSIGLIP_224PX_0_5B_MX_OXE_MAGIC_SOUP.vla_id)
     )
 
     # Directory Paths
@@ -77,15 +77,17 @@ class TrainConfig:
 
     # Tracking Parameters
     trackers: Tuple[str, ...] = ("jsonl", "wandb")                  # Trackers to initialize (if W&B, add config!)
-    wandb_project: str = "prismatic"                                  # Name of W&B project to log to (use default!)
-    wandb_entity: str = None                          # Name of entity to log under
+    wandb_project: str = "vla-camera"                                     # Name of W&B project to log to (use default!)
+    wandb_entity: str = "3210103790"                                # Name of entity to log under
 
     def __post_init__(self) -> None:
         """Lift optimization parameters from `self.vla` for ease of use =>> validate on `expected_world_size`"""
         self.epochs = self.vla.epochs
         self.max_steps = self.vla.max_steps
         self.global_batch_size = self.vla.global_batch_size
-        self.per_device_batch_size = self.vla.per_device_batch_size
+
+        self.per_device_batch_size = 16 # todo:强制控制bs， 否则accumulate那里会出问题
+        self.global_batch_size = self.per_device_batch_size * overwatch.world_size()
 
         self.learning_rate = self.vla.learning_rate
         self.weight_decay = self.vla.weight_decay
@@ -101,10 +103,7 @@ class TrainConfig:
         self.image_sequence_len = self.vla.image_sequence_len
         self.use_wrist_image = self.vla.use_wrist_image
 
-        # [Validate] Assert on `expected_world_size`
-        assert (
-            self.vla.expected_world_size == overwatch.world_size()
-        ), f"Expected World Size = {self.vla.expected_world_size} but Found {overwatch.world_size()} GPUs!"
+        self.vla.expected_world_size = overwatch.world_size()
 
     # fmt: on
 
@@ -131,7 +130,10 @@ def train(cfg: TrainConfig) -> None:
 
     # Start =>> Build Directories and Set Randomness
     overwatch.info('"Do or do not; there is no try."', ctx_level=1)
-    hf_token = cfg.hf_token.read_text().strip() if isinstance(cfg.hf_token, Path) else os.environ[cfg.hf_token]
+    try:
+        hf_token = cfg.hf_token.read_text().strip() if isinstance(cfg.hf_token, Path) else os.environ[cfg.hf_token]
+    except:
+        hf_token = os.environ.get('hf_token')
     worker_init_fn = set_global_seed(cfg.seed, get_worker_init_fn=True)
     os.makedirs(run_dir := (cfg.run_root_dir / cfg.run_id), exist_ok=True)
     os.makedirs(cfg.run_root_dir / cfg.run_id / "checkpoints", exist_ok=True)

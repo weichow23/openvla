@@ -1,3 +1,28 @@
+# Ours
+
+```bash
+# Create and activate conda environment
+conda create -n openvla python=3.10 -y
+conda activate openvla
+
+pip install -e .
+pip install packaging ninja
+ninja --version; echo $?  # Verify Ninja --> should return exit code "0"
+pip install "flash-attn==2.5.5" --no-build-isolation
+```
+
+train
+
+```shell
+export hf_token=xxx
+PYTHONPATH='./' torchrun --standalone --nnodes 1 --nproc-per-node 8 vla-scripts/train.py \
+  --data_root_dir '<openx-path>' \  # download from https://huggingface.co/datasets/WeiChow/VLATrainingDataset
+  --run_root_dir './runs/'
+```
+
+
+
+
 # OpenVLA: An Open-Source Vision-Language-Action Model
 
 [**Getting Started**](#getting-started) | [**Pretrained VLAs**](#pretrained-vlas) | [**Installation**](#installation) | [**Fine-Tuning OpenVLA via LoRA**](#fine-tuning-openvla-via-lora) | [**Fully Fine-Tuning OpenVLA**](#fully-fine-tuning-openvla) |
@@ -5,118 +30,6 @@
 
 
 <hr style="border: 2px solid gray;"></hr>
-
-## Getting Started
-
-To get started with loading and running OpenVLA models for inference, we provide a lightweight interface that leverages
-HuggingFace `transformers` AutoClasses, with minimal dependencies.
-
-For example, to load `openvla-7b` for zero-shot instruction following in the
-[BridgeData V2 environments](https://rail-berkeley.github.io/bridgedata/) with a WidowX robot:
-
-```python
-# Install minimal dependencies (`torch`, `transformers`, `timm`, `tokenizers`, ...)
-# > pip install -r https://raw.githubusercontent.com/openvla/openvla/main/requirements-min.txt
-from transformers import AutoModelForVision2Seq, AutoProcessor
-from PIL import Image
-
-import torch
-
-# Load Processor & VLA
-processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
-vla = AutoModelForVision2Seq.from_pretrained(
-    "openvla/openvla-7b",
-    attn_implementation="flash_attention_2",  # [Optional] Requires `flash_attn`
-    torch_dtype=torch.bfloat16,
-    low_cpu_mem_usage=True,
-    trust_remote_code=True
-).to("cuda:0")
-
-# Grab image input & format prompt
-image: Image.Image = get_from_camera(...)
-prompt = "In: What action should the robot take to {<INSTRUCTION>}?\nOut:"
-
-# Predict Action (7-DoF; un-normalize for BridgeData V2)
-inputs = processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)
-action = vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
-
-# Execute...
-robot.act(action, ...)
-```
-
-We also provide an [example script for fine-tuning OpenVLA models for new tasks and
-embodiments](./vla-scripts/finetune.py); this script supports different fine-tuning modes -- including (quantized)
-low-rank adaptation (LoRA) supported by [HuggingFace's PEFT library](https://huggingface.co/docs/peft/en/index).
-
-For deployment, we provide a lightweight script for [serving OpenVLA models over a REST API](./vla-scripts/deploy.py),
-providing an easy way to integrate OpenVLA models into existing robot control stacks,
-removing any requirement for powerful on-device compute.
-
-## Pretrained VLAs
-
-We release two OpenVLA models trained as part of our work, with checkpoints, configs, and model cards available [on our
-HuggingFace page](https://huggingface.co/openvla):
-- [`openvla-7b`](https://huggingface.co/openvla/openvla-7b): The flagship model from our paper, trained from
-  the Prismatic `prism-dinosiglip-224px` VLM (based on a fused DINOv2 and SigLIP vision backbone, and Llama-2 LLM).
-  Trained on a large mixture of datasets from Open X-Embodiment spanning 970K trajectories
-  ([mixture details - see "Open-X Magic Soup++"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
-- [`openvla-v01-7b`](https://huggingface.co/openvla/openvla-7b-v01): An early model used during development, trained from
-  the Prismatic `siglip-224px` VLM (singular SigLIP vision backbone, and a Vicuña v1.5 LLM). Trained on the same mixture
-  of datasets as [Octo](https://github.com/octo-models/octo), but for significantly fewer GPU hours than our final model
-  ([mixture details - see "Open-X Magic Soup"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
-
-**Explicit Notes on Model Licensing & Commercial Use**: While all code in this repository is released under an MIT
-License, our pretrained models may inherit restrictions from the underlying base models we use. Specifically, both the
-above models are derived from Llama-2, and as such are subject to the
-[Llama Community License](https://ai.meta.com/llama/license/).
-
----
-
-## Installation
-
-> **Note**: These installation instructions are for full-scale pretraining (and distributed fine-tuning); if looking to
-  just run inference with OpenVLA models (or perform lightweight fine-tuning), see instructions above!
-
-This repository was built using Python 3.10, but should be backwards compatible with any Python >= 3.8. We require
-PyTorch 2.2.* -- installation instructions [can be found here](https://pytorch.org/get-started/locally/). The latest
-version of this repository was developed and thoroughly tested with:
-  - PyTorch 2.2.0, torchvision 0.17.0, transformers 4.40.1, tokenizers 0.19.1, timm 0.9.10, and flash-attn 2.5.5
-
-**[5/21/24] Note**: Following reported regressions and breaking changes in later versions of `transformers`, `timm`, and
-`tokenizers` we explicitly pin the above versions of the dependencies. We are working on implementing thorough tests,
-and plan on relaxing these constraints as soon as we can.
-
-Use the setup commands below to get started:
-
-```bash
-# Create and activate conda environment
-conda create -n openvla python=3.10 -y
-conda activate openvla
-
-# Install PyTorch. Below is a sample command to do this, but you should check the following link
-# to find installation instructions that are specific to your compute platform:
-# https://pytorch.org/get-started/locally/
-conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia -y  # UPDATE ME!
-
-# Clone and install the openvla repo
-git clone https://github.com/openvla/openvla.git
-cd openvla
-pip install -e .
-
-# Install Flash Attention 2 for training (https://github.com/Dao-AILab/flash-attention)
-#   =>> If you run into difficulty, try `pip cache remove flash_attn` first
-pip install packaging ninja
-ninja --version; echo $?  # Verify Ninja --> should return exit code "0"
-pip install "flash-attn==2.5.5" --no-build-isolation
-```
-
-If you run into any problems during the installation process, please file a GitHub Issue.
-
-**Note:** See `vla-scripts/` for full training and verification scripts for OpenVLA models. Note that `scripts/` is
-mostly a holdover from the original (base) `prismatic-vlms` repository, with support for training and evaluating
-visually-conditioned language models; while you can use this repo to train VLMs AND VLAs, note that trying to generate
-language (via `scripts/generate.py`) with existing OpenVLA models will not work (as we only train current OpenVLA models
-to generate actions, and actions alone).
 
 ## Fine-Tuning OpenVLA via LoRA
 
