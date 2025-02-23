@@ -20,6 +20,7 @@ PYTHONPATH='./' torchrun --standalone --nnodes 1 --nproc-per-node 8 vla-scripts/
   --data_root_dir '<openx-path>' \  # download from https://huggingface.co/datasets/WeiChow/VLATrainingDataset
   --run_root_dir './runs/'
 ```
+data_root_dir 为bridge_orig/1.0.0这样的文件的父目录
 
 
 # OpenVLA: An Open-Source Vision-Language-Action Model

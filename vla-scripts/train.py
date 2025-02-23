@@ -49,7 +49,7 @@ overwatch = initialize_overwatch(__name__)
 class TrainConfig:
     # fmt: off
     vla: VLAConfig = field(
-        default_factory=VLAConfig.get_choice_class(VLARegistry.QWEN25_DINOSIGLIP_224PX_0_5B_MX_OXE_MAGIC_SOUP.vla_id)
+        default_factory=VLAConfig.get_choice_class(VLARegistry.QWEN25_DINOSIGLIP_224PX_0_5B_BRIDGE.vla_id)
     )
 
     # Directory Paths
